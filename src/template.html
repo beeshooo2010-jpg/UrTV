@@ -421,6 +421,9 @@
 
   .p-prayer{text-align:right}
   .p-prayer .big{justify-content:flex-start}
+  .prayer-progress{height:3px;margin-top:.8vh;overflow:hidden;border-radius:99px;background:rgba(var(--gold-rgb),.18)}
+  .prayer-progress i{display:block;width:0;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--gold-2),var(--gold-hi));transition:width .5s linear}
+  .p-prayer.now .prayer-progress i{background:linear-gradient(90deg,#D6AF6B,#FFE9B8)}
   .p-mid{text-align:center}
   .p-mid .big{display:block;text-align:center;line-height:1.06}
   .p-mid .num{font-size:1.3em;line-height:1}
@@ -464,6 +467,7 @@
     font-variant-numeric:tabular-nums}
   .wxd.dust{color:#E8B86A}
   .wxsub{margin-top:.55vh;font-size:clamp(12px,1.06vw,21px);font-weight:300;color:var(--dim);white-space:nowrap}
+  .wxmore{margin-top:.25vh;font-size:clamp(10px,.82vw,16px);font-weight:300;color:#A79C85;white-space:nowrap}
   .wxr:not(:empty)::before{content:'  ·  ';white-space:pre;color:rgba(214,175,107,.7)}
   .wxt:empty,.wxd:empty,.wxr:empty{display:none}
   .rule.l{margin-left:0;margin-right:auto;background:linear-gradient(90deg,var(--gold),rgba(var(--gold-rgb),0))}
@@ -531,6 +535,7 @@
     <div class="markets">
       <div class="wxline"><span class="wxt" id="wx-temp"></span><span class="wxd" id="wx-desc"></span></div>
       <div class="wxsub"><span id="wx-city">الرياض</span><span class="wxr" id="wx-range"></span></div>
+      <div class="wxmore" id="wx-more"></div>
       <div class="rule l"></div>
       <div class="mk">
         <span class="m"><span>تاسي</span><span id="tasi-chg" class="delta" hidden></span></span>
@@ -561,6 +566,7 @@
       <div class="label" id="prayer-label">الصلاة القادمة</div>
       <div class="big"><span id="prayer-name">—</span><span class="num" id="prayer-time"></span></div>
       <div class="sub" id="prayer-count">—</div>
+      <div class="prayer-progress" aria-hidden="true"><i id="prayer-progress-fill"></i></div>
     </div>
 
     <div class="panel p-mid">
@@ -934,6 +940,10 @@ function tickPrayer(){
         elC=document.getElementById('prayer-count'),
         panel=document.querySelector('.p-prayer');
   if(!PRAYERS.length) return;
+  const progress = n => {
+    const fill = document.getElementById('prayer-progress-fill');
+    if(fill) fill.style.width = Math.max(0, Math.min(100, n * 100)).toFixed(1) + '%';
+  };
   const p = riyadhParts();
   const mins = p.h*60 + p.mi + p.s/60;
 
@@ -945,6 +955,7 @@ function tickPrayer(){
   });
   if(cur){
     const left = (cur.h*60 + cur.mi + CONFIG.iqama[cur.key]) - mins;
+    progress((mins - (cur.h*60 + cur.mi)) / Math.max(1, CONFIG.iqama[cur.key] || 1));
     if(!panel.classList.contains('now')) panel.classList.add('now');
     setText(elL, 'حان الآن');
     setText(elN, prayerName(cur));
@@ -960,6 +971,8 @@ function tickPrayer(){
     const sunriseAt = sh*60 + sm, fajr = PRAYERS.find(x => x.key === 'Fajr');
     const fajrGap = CONFIG.iqama.Fajr || 0;
     if(fajr && mins >= fajr.h*60 + fajr.mi + fajrGap && mins < sunriseAt){
+      const start = fajr.h*60 + fajr.mi + fajrGap;
+      progress((mins - start) / Math.max(1, sunriseAt - start));
       panel.classList.remove('now');
       setText(elL, 'الشروق بعد');
       setText(elN, 'الشروق');
@@ -969,6 +982,7 @@ function tickPrayer(){
     }
     const elapsed = mins - sunriseAt;
     if(elapsed >= 0 && elapsed < 30){
+      progress(elapsed / 30);
       panel.classList.remove('now');
       setText(elL, elapsed < 1 ? 'حان وقت الشروق' : 'وقت الشروق');
       setText(elN, 'الشروق');
@@ -985,6 +999,10 @@ function tickPrayer(){
   const leftM = next ? (next.h*60 + next.mi) - mins
                      : (PRAYERS[0].h*60 + PRAYERS[0].mi) + 1440 - mins;
   if(!next) next = PRAYERS[0];
+  const nextAt = next.h*60 + next.mi + (next.h*60 + next.mi <= mins ? 1440 : 0);
+  const previous = [...PRAYERS].reverse().find(x => x.h*60 + x.mi <= mins);
+  const previousAt = previous ? previous.h*60 + previous.mi : PRAYERS[PRAYERS.length-1].h*60 + PRAYERS[PRAYERS.length-1].mi - 1440;
+  progress((mins - previousAt) / Math.max(1, nextAt - previousAt));
   setText(elN, prayerName(next));
   setText(elT, fmt12(next.h, next.mi));
   setHTML(elC, 'بعد <b>' + untilAdhan(leftM) + '</b>');
@@ -2860,15 +2878,15 @@ try{ WX = Object.assign(WX, JSON.parse(localStorage.getItem(LS.wx) || '{}')); }c
 const saveWx = () => { try{ localStorage.setItem(LS.wx, JSON.stringify(WX)); }catch(e){} };
 function wxExpire(){
   if(Date.now() - WX.at < WX_STALE_MS) return;
-  ['wx-temp', 'wx-desc', 'wx-range'].forEach(id => { const el = document.getElementById(id); if(el){ setText(el, ''); el.classList.remove('dust'); } });
+  ['wx-temp', 'wx-desc', 'wx-range', 'wx-more'].forEach(id => { const el = document.getElementById(id); if(el){ setText(el, ''); el.classList.remove('dust'); } });
 }
 async function loadWeather(){
   const q = `latitude=${CONFIG.latitude}&longitude=${CONFIG.longitude}&timezone=${encodeURIComponent(CONFIG.timezone)}`;
   try{
     // the hours card asks in the same request: its hourly values, and sunrise and sunset for the day or night icon
     const hours = USES('hourly');
-    const r = await fetchT(`https://api.open-meteo.com/v1/forecast?${q}&current=temperature_2m,weather_code`
-                         + `&daily=temperature_2m_max,temperature_2m_min,weather_code${hours ? ',sunrise,sunset' : ''}&forecast_days=5`
+    const r = await fetchT(`https://api.open-meteo.com/v1/forecast?${q}&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m`
+                         + `&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max${hours ? ',sunrise,sunset' : ''}&forecast_days=5`
                          + (hours ? '&hourly=temperature_2m,weather_code' : ''), 12000);
     if(!r.ok) throw 0;
     const j = await r.json();
@@ -2880,6 +2898,12 @@ async function loadWeather(){
     const hi = j.daily?.temperature_2m_max?.[0], lo = j.daily?.temperature_2m_min?.[0];
     setText(document.getElementById('wx-range'),
       (hi != null && lo != null) ? `${ar(Math.round(hi))}° / ${ar(Math.round(lo))}°` : '');
+    const details = [];
+    if(j.current.relative_humidity_2m != null) details.push('رطوبة ' + ar(Math.round(j.current.relative_humidity_2m)) + '٪');
+    const rain = j.daily?.precipitation_probability_max?.[0];
+    if(rain != null) details.push('احتمال المطر ' + ar(Math.round(rain)) + '٪');
+    if(j.current.wind_speed_10m != null) details.push('رياح ' + ar(Math.round(j.current.wind_speed_10m)) + ' كم/س');
+    setText(document.getElementById('wx-more'), details.join(' · '));
     const dl = j.daily || {};
     FORECAST = (dl.time || []).map((t, i) => ({date:t, code:dl.weather_code?.[i],
       hi:dl.temperature_2m_max?.[i], lo:dl.temperature_2m_min?.[i]})).filter(x => x.hi != null && x.lo != null);
