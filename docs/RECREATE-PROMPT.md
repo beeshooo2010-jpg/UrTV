@@ -13,7 +13,7 @@ Build ONE self-contained HTML file (no build step, no external JS libraries) tha
 One grid with three rows — `grid-template-rows: auto 1fr auto`, stage padding `3.1vh 3.6vw 5.4vh`, row gap `1.5vh`.
 
 **Top row — two ends, nothing in between:**
-- Left: weather and markets set as type, mirroring the date block on the right — no boxes, no pills.
+- Left: weather and markets set as type, mirroring the date block on the right — no boxes, no pills. Show current temperature and condition, today's high/low, humidity, rain probability and wind speed when the API supplies them.
   - Big line (same size as the Hijri date): the temperature `٣٤°` in the display font, then a short Arabic condition word (`صافي`, `غائم جزئياً`…; `غبار` in gold when PM10 is high).
   - Small line (same size as the Gregorian date): the city `·` high / low `٣٧° / ٢٤°`.
   - A short gold hairline starting at the left screen edge and fading toward the middle.
@@ -70,7 +70,7 @@ All three are built identically — small gold label, big value, small sub-line 
   `https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true`
   Mind the spelling: the query parameter is `include_24hr_change` but the response key is `usd_24h_change` (no `r`) — accept both.
 - **Weather** — Open-Meteo:
-  `https://api.open-meteo.com/v1/forecast?latitude=24.7136&longitude=46.6753&current=temperature_2m,weather_code&timezone=Asia/Riyadh`
+  `https://api.open-meteo.com/v1/forecast?latitude=24.7136&longitude=46.6753&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max&timezone=Asia/Riyadh`
   Map the WMO `weather_code` to a short Arabic phrase. Refresh every 30 minutes.
 - **Premieres** — TVMaze schedules:
   `https://api.tvmaze.com/schedule?country=US&date=YYYY-MM-DD` and `https://api.tvmaze.com/schedule/web?date=YYYY-MM-DD`, for each of the next 7 days.
