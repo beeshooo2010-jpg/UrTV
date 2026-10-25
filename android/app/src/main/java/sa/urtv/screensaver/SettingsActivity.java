@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 16017)
+Total output lines: 1217
+
 package sa.urtv.screensaver;
 
 import android.app.Activity;
@@ -41,6 +44,8 @@ import java.util.List;
 public class SettingsActivity extends Activity {
     private Prefs prefs;
     private LinearLayout list;
+    private ScrollView scroll;
+    private boolean rendered;
 
     /** Arabic locale for this screen, so every dialog title, list and button is laid out right-to-left. */
     @Override
@@ -68,7 +73,7 @@ public class SettingsActivity extends Activity {
             bg.setAlpha(0.42f);
             root.addView(bg, new FrameLayout.LayoutParams(-1, -1));
         }
-        ScrollView scroll = new ScrollView(this);
+        scroll = new ScrollView(this);
         scroll.setVerticalScrollBarEnabled(false);
         FrameLayout frame = new FrameLayout(this);
         list = new LinearLayout(this);
@@ -101,6 +106,9 @@ public class SettingsActivity extends Activity {
     }
 
     private void render() {
+        final int oldScrollY = scroll == null ? 0 : scroll.getScrollY();
+        final int oldFocusIndex = focusedListChildIndex();
+        final Object oldFocusTag = focusedListChildTag(oldFocusIndex);
         latinDigits = DigitsText.isLatin(prefs.digits());
         list.removeAllViews();
         LinearLayout head = new LinearLayout(this);
@@ -123,8 +131,8 @@ public class SettingsActivity extends Activity {
         head.addView(sub, sp0);
         list.addView(head);
 
-        row("معاينة الشاشة", "شاهد الشاشة الآن", R.drawable.ic_play, new Runnable() { public void run() {
-            startActivity(new Intent(SettingsActivity.this, MainActivity.class)); } }).requestFocus();
+        final View firstRow = row("معاينة الشاشة", "شاهد الشاشة الآن", R.drawable.ic_play, new Runnable() { public void run() {
+            startActivity(new Intent(SettingsActivity.this, MainActivity.class)); } });
 
         header("الموقع");
         row("المدينة", prefs.city()[0], R.drawable.ic_place, new Runnable() { public void run() { pickCity(); } });
@@ -212,6 +220,47 @@ public class SettingsActivity extends Activity {
             prefs.setAutoUpdate(!prefs.autoUpdate()); render(); } });
         View last = row("تحديث الشاشة الآن", "ينزّل أحدث نسخة من الشاشة", R.drawable.ic_sync, new Runnable() { public void run() { updateNow(); } });
         note(last, Updater.versionLines(this));
+
+        // Rebuilding the rows after a change used to focus the first row every time. Keep the selection and scroll position instead.
+        final int focusIndex = oldFocusIndex;
+        final Object focusTag = oldFocusTag;
+        final int scrollY = oldScrollY;
+        scroll.post(() -> {
+            scroll.scrollTo(0, scrollY);
+            View target = findRow(focusTag);
+            if (target == null && focusIndex >= 0 && focusIndex < list.getChildCount()) target = list.getChildAt(focusIndex);
+            if (target == null && !rendered) target = firstRow;
+            if (target != null) target.requestFocus();
+            rendered = true;
+        });
+    }
+
+    private int focusedListChildIndex() {
+        if (list == null) return -1;
+        View focus = getCurrentFocus();
+        if (focus == null) return -1;
+        for (int i = 0; i < list.getChildCount(); i++) {
+            View child = list.getChildAt(i);
+            for (View v = focus; v != null; ) {
+                if (v == child) return i;
+                android.view.ViewParent parent = v.getParent();
+                v = parent instanceof View ? (View) parent : null;
+            }
+        }
+        return -1;
+    }
+
+    private Object focusedListChildTag(int index) {
+        return list != null && index >= 0 && index < list.getChildCount() ? list.getChildAt(index).getTag() : null;
+    }
+
+    private View findRow(Object tag) {
+        if (tag == null || list == null) return null;
+        for (int i = 0; i < list.getChildCount(); i++) {
+            View child = list.getChildAt(i);
+            if (tag.equals(child.getTag()) && child.isFocusable()) return child;
+        }
+        return null;
     }
 
     // ---------- pickers ----------
@@ -523,8 +572,7 @@ public class SettingsActivity extends Activity {
         final int previewW = 480, viewH = 300, pad = 22;   // dp: the page is laid out in a box like the home screen's, 480 wide
         final LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.HORIZONTAL);
-        box.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
-        box.setPadding(dp(12), dp(4), dp(12), dp(4));
+  …17 tokens truncated…x.setPadding(dp(12), dp(4), dp(12), dp(4));
         final android.widget.ListView lv = new android.widget.ListView(this);
         lv.setDividerHeight(0);
         lv.setSelector(getDrawable(R.drawable.glass_focus));
@@ -1068,6 +1116,7 @@ public class SettingsActivity extends Activity {
         card.setPadding(dp(24), dp(14), dp(20), dp(14));
         card.setFocusable(true);
         card.setClickable(true);
+        card.setTag(label);
         card.setBackgroundResource(R.drawable.glass_row);   // glass; the gold-tinted one while it has the focus
 
         final android.widget.ImageView ic = new android.widget.ImageView(this);
@@ -1167,3 +1216,4 @@ public class SettingsActivity extends Activity {
 
     private int dp(int v) { return Math.round(v * getResources().getDisplayMetrics().density); }
 }
+
