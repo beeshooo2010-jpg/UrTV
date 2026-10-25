@@ -2160,12 +2160,12 @@ function liveRect(){
 
 let FORECAST = [];
 try{ FORECAST = JSON.parse(localStorage.getItem(LS.forecast) || '[]') || []; }catch(e){}
-const PANEL_TITLE = {today:'يومك', shows:'هذا الأسبوع', prayers:'مواقيت اليوم', forecast:'الأيام القادمة', hourly:'الساعات القادمة', matches:CONFIG.leagues.length ? 'المباريات' : 'مباريات فرقك', news:'أخبار السعودية والمدينة', tasks:'المهام', year:'السنة'};
+const PANEL_TITLE = {today:'يومك', shows:'هذا الأسبوع', prayers:'مواقيت اليوم', forecast:'الأيام القادمة', hourly:'الساعات القادمة', matches:CONFIG.leagues.length ? 'المباريات' : 'مباريات فرقك', news:'أخبار العالم والسعودية', tasks:'المهام', year:'السنة'};
 const LISTS = ['matches', 'stocks', 'tasks', 'shows'];   // the kinds that page through their rows
 
 let NEWS_ITEMS = [];
 let NEWS_LOADING = false;
-const NEWS_CACHE_KEY = 'news:' + CONFIG.city;
+const NEWS_CACHE_KEY = 'news-v2:' + CONFIG.city;
 try{
   const cached = JSON.parse(localStorage.getItem(NEWS_CACHE_KEY) || 'null');
   if(cached && Array.isArray(cached.items) && Date.now() - cached.at < 24*3600000) NEWS_ITEMS = cached.items;
@@ -2182,28 +2182,38 @@ function parseNews(xml){
   })).filter(x => x.title && /^https:\/\//.test(x.link));
 }
 
-async function loadNews(){
-  if(NEWS_LOADING) return;
-  NEWS_LOADING = true;
-  const q = `\"السعودية\" OR \"${CONFIG.city}\"`;
-  const feed = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=ar&gl=SA&ceid=SA:ar`;
+async function newsFeed(section, query){
+  const feed = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=ar&gl=SA&ceid=SA:ar`;
   const routes = [
     [feed, async x => x.text()],
     ['https://api.allorigins.win/get?url=' + encodeURIComponent(feed), async x => (await x.json()).contents],
   ];
+  for(const [url, unwrap] of routes){
+    try{
+      const r = await fetchT(url, 12000);
+      if(!r.ok) continue;
+      const items = parseNews(await unwrap(r));
+      if(items.length) return items.map(x => Object.assign(x, {section}));
+    }catch(e){}
+  }
+  return [];
+}
+
+async function loadNews(){
+  if(NEWS_LOADING) return;
+  NEWS_LOADING = true;
   try{
-    for(const [url, unwrap] of routes){
-      try{
-        const r = await fetchT(url, 12000);
-        if(!r.ok) continue;
-        const xml = await unwrap(r);
-        const items = parseNews(xml);
-        if(!items.length) continue;
-        NEWS_ITEMS = items;
-        try{ localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify({at:Date.now(), items})); }catch(e){}
-        renderPanel(false, 'news');
-        break;
-      }catch(e){}
+    const [world, saudi] = await Promise.all([
+      newsFeed('عالمية', 'أخبار عالمية OR أخبار دولية OR شؤون العالم when:7d'),
+      newsFeed('السعودية والمدينة', `السعودية OR "${CONFIG.city}" when:7d`),
+    ]);
+    // Reserve two places for each feed so the faster-moving Saudi headlines cannot hide world news.
+    const items = [...world.slice(0, 2), ...saudi.slice(0, 2)];
+    const seen = new Set();
+    NEWS_ITEMS = items.filter(x => { const k = x.link || x.title; if(seen.has(k)) return false; seen.add(k); return true; });
+    if(NEWS_ITEMS.length){
+      try{ localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify({at:Date.now(), items:NEWS_ITEMS})); }catch(e){}
+      renderPanel(false, 'news');
     }
   }finally{ NEWS_LOADING = false; }
 }
@@ -2212,11 +2222,10 @@ function newsRows(){
   return NEWS_ITEMS.slice(0, 4).map(item => {
     const age = item.date ? Math.max(0, Math.round((Date.now() - item.date) / 60000)) : null;
     const when = age === null ? '' : age < 1 ? 'الآن' : age < 60 ? `قبل ${ar(age)} د` : `قبل ${ar(Math.floor(age/60))} س`;
-    const source = [item.source, when].filter(Boolean).map(esc).join(' · ');
-    return `<li class=\"news-item\"><span class=\"news-title\">${esc(item.title)}</span><span class=\"news-meta\">${source}</span></li>`;
+    const source = [item.section, item.source, when].filter(Boolean).map(esc).join(' · ');
+    return `<li class="news-item"><span class="news-title">${esc(item.title)}</span><span class="news-meta">${source}</span></li>`;
   });
 }
-
 
 // ---- «يومك» (today): the day in one card: the next prayer, the next game of a followed team, the first open task, the next
 // occasion. A line with nothing to say is left out.
