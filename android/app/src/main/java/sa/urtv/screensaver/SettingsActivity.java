@@ -1,5 +1,5 @@
-Warning: truncated output (original token count: 16017)
-Total output lines: 1217
+Warning: truncated output (original token count: 16130)
+Total output lines: 1225
 
 package sa.urtv.screensaver;
 
@@ -46,6 +46,8 @@ public class SettingsActivity extends Activity {
     private LinearLayout list;
     private ScrollView scroll;
     private boolean rendered;
+    private Object lastFocusTag;
+    private int lastFocusIndex = -1;
 
     /** Arabic locale for this screen, so every dialog title, list and button is laid out right-to-left. */
     @Override
@@ -107,8 +109,9 @@ public class SettingsActivity extends Activity {
 
     private void render() {
         final int oldScrollY = scroll == null ? 0 : scroll.getScrollY();
-        final int oldFocusIndex = focusedListChildIndex();
-        final Object oldFocusTag = focusedListChildTag(oldFocusIndex);
+        final int currentFocusIndex = focusedListChildIndex();
+        final int oldFocusIndex = currentFocusIndex >= 0 ? currentFocusIndex : lastFocusIndex;
+        final Object oldFocusTag = currentFocusIndex >= 0 ? focusedListChildTag(currentFocusIndex) : lastFocusTag;
         latinDigits = DigitsText.isLatin(prefs.digits());
         list.removeAllViews();
         LinearLayout head = new LinearLayout(this);
@@ -230,7 +233,11 @@ public class SettingsActivity extends Activity {
             View target = findRow(focusTag);
             if (target == null && focusIndex >= 0 && focusIndex < list.getChildCount()) target = list.getChildAt(focusIndex);
             if (target == null && !rendered) target = firstRow;
-            if (target != null) target.requestFocus();
+            if (target != null) {
+                target.requestFocus();
+                lastFocusTag = target.getTag();
+                lastFocusIndex = list.indexOfChild(target);
+            }
             rendered = true;
         });
     }
@@ -567,13 +574,7 @@ public class SettingsActivity extends Activity {
      * from the page once it has drawn). The dialog is in the screen's glass design (Dlg). The WebView is made when the picker opens and
      * destroyed when it closes; it keeps the TV's text size out of it (setTextZoom(100) in ScreenView) like every other one of ours.
      */
-    private void pickWithPreview(String title, final String[] values, final String[] labels, final String[] about, int selected,
-                                 final Url urlFor, final Pick onPick) {
-        final int previewW = 480, viewH = 300, pad = 22;   // dp: the page is laid out in a box like the home screen's, 480 wide
-        final LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.HORIZONTAL);
-  …17 tokens truncated…x.setPadding(dp(12), dp(4), dp(12), dp(4));
-        final android.widget.ListView lv = new android.widget.ListView(this);
+    private void pickWithPreview(String title, final String[] values, final String[] la…130 tokens truncated…w android.widget.ListView(this);
         lv.setDividerHeight(0);
         lv.setSelector(getDrawable(R.drawable.glass_focus));
         lv.setAdapter(new android.widget.BaseAdapter() {
@@ -1158,6 +1159,7 @@ public class SettingsActivity extends Activity {
         card.setOnFocusChangeListener((v, has) -> {
             // No scaling: a scaled rounded card overlapped its neighbours and blurred the text. The glass changes by itself (glass_row).
             chevron.setTextColor(has ? 0xFFD6AF6B : 0x99C6BBA4);
+            if (has) { lastFocusTag = label; lastFocusIndex = list.indexOfChild(card); }
         });
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
         lp.bottomMargin = dp(9);
